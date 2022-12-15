@@ -1,6 +1,5 @@
-//import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap/dist/css/bootstrap.min.css";
 import "react-toastify/dist/ReactToastify.css";
-import './App.css';
 
 import {  useState, useEffect } from 'react';
 import { ethers } from "ethers";
@@ -85,26 +84,31 @@ function App() {
 
   async function getData(connect = false) {
     
-    await getProvider(connect);
-    
-    const currState = (await contractDeployed.released())
-    if (currState){
-      setReleased("True")
-    }else {
-      setReleased("Not yet")
+    try {
+      await getProvider(connect);
+      const currState = (await contractDeployed.released())
+      if (currState){
+        setReleased("True")
+      }else {
+        setReleased("Not yet")
+      }
+      setTokenAddress(await contractDeployed.token())
+      setEnd((await contractDeployed.end()).toString())
+      setPrice((await contractDeployed.price()).toString())
+      setAvailableTokens((await contractDeployed.availableTokens()).toString())
+      let minVal =(await contractDeployed.minPurchase()).toString()
+      setMinPurchase(minVal)
+      let maxVal = (await contractDeployed.maxPurchase()).toString()
+      setMaxPurchase(maxVal)
+      setAdmin(await contractDeployed.admin())  
+    } catch (error) {
+      toastMessage('Install the metamask in your browser. If you has, change to goerli testnet');
     }
-    setTokenAddress(await contractDeployed.token())
-    setEnd((await contractDeployed.end()).toString())
-    setPrice((await contractDeployed.price()).toString())
-    setAvailableTokens((await contractDeployed.availableTokens()).toString())
-    setMinPurchase((await contractDeployed.minPurchase()).toString())
-    setMaxPurchase((await contractDeployed.maxPurchase()).toString())
-    
-    setAdmin(await contractDeployed.admin())  
     
   }
 
   async function handleStart(){
+    toastMessage("entrou")
     await getProvider(true);
     try {
       const resp  = await contractDeployedSigner.start(inputDuration, inputPrice, inputAvailableTokens, inputMinPurchase, inputMaxPurchase);  
@@ -171,48 +175,65 @@ function App() {
         {
           userAccount =='' ?<>
             <h2>Connect your wallet</h2>
-            <button onClick={() => getData(true)}>Connect</button>
+            <div className="row col-3 mb-3 justify-content-center">
+              <button className="btn btn-primary" onClick={() => getData(true)}>Connect</button>
+            </div>
+            
           </>
           :<>
             <h2>User data</h2>
-            <p>User account: {userAccount}</p>
-            <button onClick={disconnect}>Disconnect</button></>
+            <label>User account: {userAccount}</label>
+            <button className="btn btn-primary col-3" onClick={disconnect}>Disconnect</button>
+          </>          
+            
         }
         
         <hr/>
         <h2>ICO data</h2>
-        <p>Admin: {admin}</p>
-        <p>Released: {released}</p>
-        <p>Token address: {tokenAddress}</p>
-        <p>Token Price: {price}</p>
-        <p>End: {end}</p>
-        <p>Available tokens: {availableTokens}</p>
-        <p>Min Purchase: {minPurchase}</p>
-        <p>Max Purchase: {maxPurchase}</p>
+        <label>Admin: {admin}</label>
+        <label>Released: {released}</label>
+        <label>Token address: {tokenAddress}</label>
+        <label>Token Price: {price}</label>
+        <label>End: {end}</label>
+        <label>Available tokens: {availableTokens}</label>
+        <label>Min Purchase: {minPurchase}</label>
+        <label>Max Purchase: {maxPurchase}</label>
         <hr/>
 
         <h2>Start ICO (only admin)</h2>
-        <input type="text" placeholder="Duration" onChange={(e) => setInputDuration(e.target.value)} value={inputDuration}/>
-        <input type="text" placeholder="Price" onChange={(e) => setInputPrice(e.target.value)} value={inputPrice}/>
-        <input type="text" placeholder="Available tokens" onChange={(e) => setInputAvailableTokens(e.target.value)} value={inputAvailableTokens}/>
-        <input type="text" placeholder="Min Purchase" onChange={(e) => setInputMinPurchase(e.target.value)} value={inputMinPurchase}/>
-        <input type="text" placeholder="Max Purchase" onChange={(e) => setInputMaxPurchase(e.target.value)} value={inputMaxPurchase}/>
-        <button onClick={handleStart}>Click to start the ICO</button>
-        <hr/>
+        <div className="row col-3 mb-3 justify-content-center">
+          <input type="text" className="mb-1" placeholder="Duration" onChange={(e) => setInputDuration(e.target.value)} value={inputDuration}/>
+          <input type="number" className="mb-1" placeholder="Price" onChange={(e) => setInputPrice(e.target.value)} value={inputPrice}/>
+          <input type="number" className="mb-1" placeholder="Available tokens" onChange={(e) => setInputAvailableTokens(e.target.value)} value={inputAvailableTokens}/>
+          <input type="number" className="mb-1" placeholder="Min Purchase" onChange={(e) => setInputMinPurchase(e.target.value)} value={inputMinPurchase}/>
+          <input type="number"  className="mb-1" placeholder="Max Purchase" onChange={(e) => setInputMaxPurchase(e.target.value)} value={inputMaxPurchase}/>
+          <button className="btn btn-primary" onClick={handleStart}>Start ICO</button>
+        </div>
+        
 
         <h2>Approve in whitelist (only admin)?</h2>
-        <input type="text" placeholder="Address" onChange={(e) => setInputAddressWhitelist(e.target.value)} value={inputAddressWhitelist}/>
-        <button onClick={handleApproveInWhitelist}>Approve</button>
+        <div className="row col-3 mb-3 justify-content-center">
+          <input type="text" className="mb-1" placeholder="Address" onChange={(e) => setInputAddressWhitelist(e.target.value)} value={inputAddressWhitelist}/>
+          <button className="btn btn-primary" onClick={handleApproveInWhitelist}>Approve</button>
+        </div>
 
         <h2>Are you in whitelist?</h2>
-        <button onClick={handleCheckWhitelist}>Check</button>
+        <div className="row col-3 mb-3 justify-content-center">
+          <button className="btn btn-primary" onClick={handleCheckWhitelist}>Check</button>
+        </div>
+        
 
         <h2>Buy tokens</h2>
-        <input type="text" placeholder="Value in wei to buy tokens" onChange={(e) => setInputValueBuy(e.target.value)} value={inputValueBuy}/>
-        <button onClick={handleBuy}>Buy tokens</button>
-
+        <div className="row col-3 mb-3 justify-content-center">
+          <label>{inputValueBuy}</label>
+          <input className="mb-1" type="range" placeholder="Value in wei to buy tokens" onChange={(e) => setInputValueBuy(e.target.value)} value={inputValueBuy} min={minPurchase} max={maxPurchase}/>
+          <button className="btn mb-1 btn-primary" onClick={handleBuy}>Buy tokens</button>
+        </div>
+        
         <h2>Release (only admin)</h2>
-        <button onClick={handleRelease}>Release</button>
+        <div className="row col-3 mb-3 justify-content-center">
+          <button className="btn btn-primary" onClick={handleRelease}>Release</button>
+        </div>
                        
       </WRContent>
       <WRTools react={true} hardhat={true} bootstrap={true} solidity={true} css={true} javascript={true} ethersjs={true} />
