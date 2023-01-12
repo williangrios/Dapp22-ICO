@@ -1,7 +1,8 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "react-toastify/dist/ReactToastify.css";
+import './App.css';
 
-import {  useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ethers } from "ethers";
 import {ToastContainer, toast} from "react-toastify";
 
@@ -10,12 +11,20 @@ import WRFooter from 'wrcomponents/dist/WRFooter';
 import WRInfo from 'wrcomponents/dist/WRInfo';
 import WRContent from 'wrcomponents/dist/WRContent';
 import WRTools from 'wrcomponents/dist/WRTools';
+import Button from "react-bootstrap/Button";
 
-import LotteryContract from './artifacts/contracts/ICO.sol/ICO.json';
+import { compactAddress } from "./utils";
+import meta from "./assets/metamask.png";
 
+import ICOContract from './artifacts/contracts/ICO.sol/ICO.json';
+ 
 function App() {
 
-  const [userAccount, setUserAccount] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState({});
+  const [provider, setProvider] = useState();
+  const [contract, setContract] = useState();
+  const [signer, setSigner] = useState();
 
   const [tokenAddress, setTokenAddress] = useState('');
   const [admin, setAdmin] = useState('');
@@ -36,133 +45,175 @@ function App() {
 
   const [inputAddressWhitelist, setInputAddressWhitelist] = useState('');
 
-  const addressContract = '0x34D4d2E698Abd91c1Ab4ab62744673D2cb5EB7Ea';
+  const contractAddress = '0x34D4d2E698Abd91c1Ab4ab62744673D2cb5EB7Ea';
   
-  let contractDeployed = null;
-  let contractDeployedSigner = null;
-  
-  async function getProvider(connect = false){
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    if (contractDeployed == null){
-      contractDeployed = new ethers.Contract(addressContract, LotteryContract.abi, provider)
-    }
-    if (contractDeployedSigner == null){
-      if (connect){
-        let userAcc = await provider.send('eth_requestAccounts', []);
-        setUserAccount(userAcc[0]);
-      }
-      contractDeployedSigner = new ethers.Contract(addressContract, LotteryContract.abi, provider.getSigner());
-    }
-  }
-
-  async function disconnect(){
+  async function handleConnectWallet (){
     try {
-      setUserAccount('');
-    } catch (error) {
+      setLoading(true);
       
+      let userAcc = await provider.send('eth_requestAccounts', []);
+      setUser({account: userAcc[0], connected: true});
+      
+      const contrSig = new ethers.Contract(contractAddress, ICOContract.abi, provider.getSigner())
+      setSigner( contrSig)
+    } catch (error) {
+      console.log(error);
+      if (error.message == 'provider is undefined'){
+        toastMessage('No provider detected.')
+      } else if(error.code === -32002){
+        toastMessage('Check your metamask')
+      }
+    } finally{
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    getData()
+    async function getData() {
+      try {
+        console.log('get data init');
+        const {ethereum} = window;
+        if (!ethereum){
+          toastMessage('Metamask not detected');
+          return
+        }
+        const prov =  new ethers.providers.Web3Provider(window.ethereum);
+        setProvider(prov);
+        const contr = new ethers.Contract(contractAddress, ICOContract.abi, prov);
+        setContract(contr);
+        
+        if (! await isGoerliTestnet()){
+          toastMessage('Change to goerli testnet.')
+          return;
+        }
+
+        //contract data
+        const currState = (await contr.released())
+        if (currState){
+          setReleased("True")
+        }else {
+          setReleased("Not yet")
+        }
+        setTokenAddress(await contr.token())
+        setEnd((await contr.end()).toString())
+        setPrice((await contr.price()).toString())
+        setAvailableTokens((await contr.availableTokens()).toString())
+        let minVal =(await contr.minPurchase()).toString()
+        setMinPurchase(minVal)
+        let maxVal = (await contr.maxPurchase()).toString()
+        setMaxPurchase(maxVal)
+        setAdmin(await contr.admin())  
+  
+        console.log('get data end');
+      } catch (error) {
+        toastMessage(error.reason)        
+      }
+    }
+    getData()  
   }, [])
+  
+  function isConnected(){
+    if (!user.connected){
+      toastMessage('You are not connected!')
+      return false;
+    }
+    return true;
+  }
+
+  async function isGoerliTestnet(){
+    const goerliChainId = "0x5";
+    const respChain = await getChain();
+    return goerliChainId == respChain;
+  }
+
+  async function getChain() {
+    const currentChainId = await  window.ethereum.request({method: 'eth_chainId'})
+    return currentChainId;
+  }
+
+  async function handleDisconnect(){
+    try {
+      setUser({});
+      setSigner(null);
+    } catch (error) {
+      toastMessage(error.reason)
+    }
+  }
 
   function toastMessage(text) {
     toast.info(text)  ;
   }
 
-  function toTimestamp(strDate){
-    let dateFormatted = Date.parse(strDate);
-    return dateFormatted;
-  }
-
-  function formatDate(dateTimestamp){
-    let date = new Date(parseInt(dateTimestamp));
-    let dateFormatted = date.getDate() + "/" + (date.getMonth() + 1) + "/" + date.getFullYear() ;
-    return dateFormatted;
-  }
-
-  async function getData(connect = false) {
-    
+  async function executeSigner(func, successMessage){
     try {
-      await getProvider(connect);
-      const currState = (await contractDeployed.released())
-      if (currState){
-        setReleased("True")
-      }else {
-        setReleased("Not yet")
+      if (!isConnected()) {
+        return;
       }
-      setTokenAddress(await contractDeployed.token())
-      setEnd((await contractDeployed.end()).toString())
-      setPrice((await contractDeployed.price()).toString())
-      setAvailableTokens((await contractDeployed.availableTokens()).toString())
-      let minVal =(await contractDeployed.minPurchase()).toString()
-      setMinPurchase(minVal)
-      let maxVal = (await contractDeployed.maxPurchase()).toString()
-      setMaxPurchase(maxVal)
-      setAdmin(await contractDeployed.admin())  
+      if (!await isGoerliTestnet()){
+        toastMessage('Change to goerli testnet.')
+        return;
+      }
+      setLoading(true);
+      const resp = await func;  
+      toastMessage("Please wait.")
+      await resp.wait();
+      toastMessage(successMessage)
     } catch (error) {
-      toastMessage('Install the metamask in your browser. If you has, change to goerli testnet');
+      console.log(error);
+      toastMessage(error.reason)      
+    } finally{
+      setLoading(false);
     }
-    
   }
+
 
   async function handleStart(){
-    toastMessage("entrou")
-    await getProvider(true);
-    try {
-      const resp  = await contractDeployedSigner.start(inputDuration, inputPrice, inputAvailableTokens, inputMinPurchase, inputMaxPurchase);  
-      console.log(resp);
-      toastMessage("ICO started")
-    } catch (error) {
-      toastMessage(error.reason);
+    if (signer === undefined || signer === null){
+      toastMessage("Please, connect your metamask")
+      return
     }
+    const func = signer.start(inputDuration, inputPrice, inputAvailableTokens, inputMinPurchase, inputMaxPurchase);  
+    executeSigner(func, "Ico Started.")    
   }
 
   async function handleCheckWhitelist(){
-    await getProvider(true);
-    try {
-      const resp  = await contractDeployedSigner.checkWhiteList();  
-      if (resp){
-        toastMessage("You are whitelisted")
-      }else{
-        toastMessage("You are not whitelisted")
-      }
-      
-    } catch (error) {
-      toastMessage(error.reason);
+    if (signer === undefined || signer === null){
+      toastMessage("Please, connect your metamask")
+      return
+    }
+    const resp = await signer.checkWhiteList();  
+    if (resp){
+      toastMessage("You are whitelisted")
+    }else{
+      toastMessage("You are not whitelisted")
     }
   }
 
   async function handleApproveInWhitelist(){
-    await getProvider(true);
-    try {
-      const resp  = await contractDeployedSigner.whiteList(inputAddressWhitelist);  
-      toastMessage("Approved in whitelist")
-    } catch (error) {
-      toastMessage(error.reason);
+    if (signer === undefined || signer === null){
+      toastMessage("Please, connect your metamask")
+      return
     }
+    const func = signer.whiteList(inputAddressWhitelist);  
+    executeSigner(func, "Approved in whitelist.")    
   }
 
   async function handleBuy(){
-    await getProvider(true);
-    try {
-      console.log(inputValueBuy);
-      const resp  = await contractDeployedSigner.buy({value: inputValueBuy});  
-      toastMessage("Tokens bought")
-    } catch (error) {
-      toastMessage(error.reason);
+    if (signer === undefined || signer === null){
+      toastMessage("Please, connect your metamask")
+      return
     }
+    const func = signer.buy({value: inputValueBuy});  
+    executeSigner(func, "Tokens bought.")    
   }
 
   async function handleRelease(){
-    await getProvider(true);
-    try {
-      const resp  = await contractDeployedSigner.release();  
-      toastMessage("Released")
-    } catch (error) {
-      toastMessage(error.reason);
+    if (signer === undefined || signer === null){
+      toastMessage("Please, connect your metamask")
+      return
     }
+    const func = signer.release();  
+    executeSigner(func, "Released.")    
   }
 
   return (
@@ -172,24 +223,24 @@ function App() {
       <WRInfo chain="Goerli testnet" />
       <WRContent>
         
-        {
-          userAccount =='' ?<>
-            <h2>Connect your wallet</h2>
-            <div className="row col-3 mb-3 justify-content-center">
-              <button className="btn btn-primary" onClick={() => getData(true)}>Connect</button>
-            </div>
-            
-          </>
-          :<>
-            <h2>User data</h2>
-            <label>User account: {userAccount}</label>
-            <button className="btn btn-primary col-3" onClick={disconnect}>Disconnect</button>
-          </>          
-            
+      <h1>ICO</h1>
+        {loading && 
+          <h1>Loading....</h1>
         }
-        
+
+        { !user.connected ?<>
+            <Button className="commands " variant="btn btn-primary" onClick={handleConnectWallet}>
+              <img src={meta} alt="metamask" width="30px" height="30px"/>Connect to Metamask
+            </Button>
+            </>
+          : <>
+            <label>Welcome {compactAddress(user.account)}</label>
+            <button className="btn btn-primary commands" onClick={handleDisconnect}>Disconnect</button>
+          </>
+        }
+
         <hr/>
-        <h2>ICO data</h2>
+        <h2>Contract data</h2>
         <label>Admin: {admin}</label>
         <label>Released: {released}</label>
         <label>Token address: {tokenAddress}</label>
@@ -201,39 +252,28 @@ function App() {
         <hr/>
 
         <h2>Start ICO (only admin)</h2>
-        <div className="row col-3 mb-3 justify-content-center">
-          <input type="text" className="mb-1" placeholder="Duration" onChange={(e) => setInputDuration(e.target.value)} value={inputDuration}/>
-          <input type="number" className="mb-1" placeholder="Price" onChange={(e) => setInputPrice(e.target.value)} value={inputPrice}/>
-          <input type="number" className="mb-1" placeholder="Available tokens" onChange={(e) => setInputAvailableTokens(e.target.value)} value={inputAvailableTokens}/>
-          <input type="number" className="mb-1" placeholder="Min Purchase" onChange={(e) => setInputMinPurchase(e.target.value)} value={inputMinPurchase}/>
-          <input type="number"  className="mb-1" placeholder="Max Purchase" onChange={(e) => setInputMaxPurchase(e.target.value)} value={inputMaxPurchase}/>
-          <button className="btn btn-primary" onClick={handleStart}>Start ICO</button>
-        </div>
+        <input type="text" className="mb-1 commands" placeholder="Duration" onChange={(e) => setInputDuration(e.target.value)} value={inputDuration}/>
+        <input type="number" className="mb-1 commands" placeholder="Price" onChange={(e) => setInputPrice(e.target.value)} value={inputPrice}/>
+        <input type="number" className="mb-1 commands" placeholder="Available tokens" onChange={(e) => setInputAvailableTokens(e.target.value)} value={inputAvailableTokens}/>
+        <input type="number" className="mb-1 commands" placeholder="Min Purchase" onChange={(e) => setInputMinPurchase(e.target.value)} value={inputMinPurchase}/>
+        <input type="number"  className="mb-1 commands" placeholder="Max Purchase" onChange={(e) => setInputMaxPurchase(e.target.value)} value={inputMaxPurchase}/>
+        <button className="btn btn-primary commands" onClick={handleStart}>Start ICO</button>
         
 
         <h2>Approve in whitelist (only admin)?</h2>
-        <div className="row col-3 mb-3 justify-content-center">
-          <input type="text" className="mb-1" placeholder="Address" onChange={(e) => setInputAddressWhitelist(e.target.value)} value={inputAddressWhitelist}/>
-          <button className="btn btn-primary" onClick={handleApproveInWhitelist}>Approve</button>
-        </div>
+        <input type="text" className="mb-1 commands" placeholder="Address" onChange={(e) => setInputAddressWhitelist(e.target.value)} value={inputAddressWhitelist}/>
+        <button className="btn btn-primary commands" onClick={handleApproveInWhitelist}>Approve</button>
 
         <h2>Are you in whitelist?</h2>
-        <div className="row col-3 mb-3 justify-content-center">
-          <button className="btn btn-primary" onClick={handleCheckWhitelist}>Check</button>
-        </div>
-        
+        <button className="btn btn-primary commands" onClick={handleCheckWhitelist}>Check</button>
 
         <h2>Buy tokens</h2>
-        <div className="row col-3 mb-3 justify-content-center">
-          <label>{inputValueBuy}</label>
-          <input className="mb-1" type="range" placeholder="Value in wei to buy tokens" onChange={(e) => setInputValueBuy(e.target.value)} value={inputValueBuy} min={minPurchase} max={maxPurchase}/>
-          <button className="btn mb-1 btn-primary" onClick={handleBuy}>Buy tokens</button>
-        </div>
+        <label>{inputValueBuy}</label>
+        <input className="mb-1 commands" type="range" placeholder="Value in wei to buy tokens" onChange={(e) => setInputValueBuy(e.target.value)} value={inputValueBuy} min={minPurchase} max={maxPurchase}/>
+        <button className="btn mb-1 btn-primary commands" onClick={handleBuy}>Buy tokens</button>
         
         <h2>Release (only admin)</h2>
-        <div className="row col-3 mb-3 justify-content-center">
-          <button className="btn btn-primary" onClick={handleRelease}>Release</button>
-        </div>
+        <button className="btn btn-primary commands" onClick={handleRelease}>Release</button>
                        
       </WRContent>
       <WRTools react={true} hardhat={true} bootstrap={true} solidity={true} css={true} javascript={true} ethersjs={true} />
