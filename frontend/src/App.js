@@ -220,7 +220,7 @@ function App() {
     <div className="container">
       <ToastContainer position="top-center" autoClose={5000}/>
       <WRHeader title="ICO" image={true} />
-      <WRInfo chain="Goerli testnet" />
+      <WRInfo chain="Goerli" testnet={true} />
       <WRContent>
         
       <h1>ICO</h1>
